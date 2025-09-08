@@ -168,30 +168,16 @@ void loop() {
   // Give serial a moment to initialize
   delay(50);
 
-  // Check if USB is connected by testing if Serial is ready
-  // This works because Serial only becomes ready when USB host is connected
-  bool usbConnected = false;
-  if (Serial) {
-    // Send a test character and see if it can be written
-    // If USB is connected, this will succeed quickly
-    Serial.print("");
-    Serial.flush();
-    usbConnected = true;
-  }
+  // Send wake-up signal to indicate Arduino is ready for time sync
+  Serial.println("WAKE_UP");
+  Serial.flush();
 
-  // Only wait for sync commands if USB is connected
-  if (usbConnected) {
-    // Send wake-up signal to indicate Arduino is ready for time sync
-    Serial.println("WAKE_UP");
-    Serial.flush();
-
-    // Wait briefly for time sync command (50ms window)
-    unsigned long syncWindow = millis() + 50;
-    while (millis() < syncWindow) {
-      if (Serial.available()) {
-        syncClock();
-        break;
-      }
+  // Wait briefly for time sync command (50ms window)
+  unsigned long syncWindow = millis() + 50;
+  while (millis() < syncWindow) {
+    if (Serial.available()) {
+      syncClock();
+      break;
     }
   }
 
@@ -213,12 +199,8 @@ void loop() {
   } else {
     Serial.println("LOG ERR");
   }
-
-  // Only output to serial if USB is connected
-  if (usbConnected) {
-    Serial.println(timeString);
-    Serial.flush();
-  }
+  Serial.println(timeString);
+  Serial.flush();
 
   // Disable serial communication before sleep for maximum power savings
   Serial.end();

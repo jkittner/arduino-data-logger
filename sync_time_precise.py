@@ -52,9 +52,9 @@ def list_serial_ports():
             print(f"     Manufacturer: {port.manufacturer}")
 
 
-def sync_precise_time_to_arduino(port, baudrate=9600, timeout=5):
+def sync_precise_time_to_arduino(port, baudrate=9600, timeout=30):
     """
-    Sync time to Arduino with precise timing at second boundary
+    Sync time to Arduino with precise timing using handshake protocol
 
     Args:
         port (str): Serial port
@@ -76,75 +76,63 @@ def sync_precise_time_to_arduino(port, baudrate=9600, timeout=5):
         ser.flushInput()
         ser.flushOutput()
 
-        print('Waiting for next second boundary for precise sync...')
+        print('Waiting for Arduino WAKE_UP signal...')
 
-        # Wait until we're close to the next second boundary
-        while True:
-            now = datetime.datetime.now(datetime.UTC)
-            microseconds = now.microsecond
-
-            # If we're within 100ms of the next second, prepare for sync
-            if microseconds >= 900000:  # 0.9 seconds
-                # Wait for the exact second boundary
-                while datetime.datetime.now(datetime.UTC).microsecond > 100000:
-                    time.sleep(0.001)  # 1ms sleep
-
-                # Get the time right at the second boundary
-                sync_time = datetime.datetime.now(datetime.UTC)
-
-                # Add 1 second to compensate for transmission delay
-                sync_t_comp = sync_time + \
-                    datetime.timedelta(seconds=1)
-
-                # Format and send command immediately
-                time_command = f"SYNC_TIME:{sync_t_comp.year},{sync_t_comp.month:02d},{sync_t_comp.day:02d},{sync_t_comp.hour:02d},{sync_t_comp.minute:02d},{sync_t_comp.second:02d}\n"  # noqa: E501
-
-                print(
-                    f"Syncing at: {sync_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}",
-                )
-                print(
-                    f"Setting Arduino to: {sync_t_comp.strftime('%Y-%m-%d %H:%M:%S')}",
-                )
-
-                ser.write(time_command.encode())
-                break
-            else:
-                time.sleep(0.1)  # Wait 100ms before checking again
-
-        # Wait for response
-        response_timeout = time.time() + timeout
-
-        while time.time() < response_timeout:
+        # Wait for Arduino to send WAKE_UP signal
+        start_time = time.time()
+        while time.time() < start_time + timeout:
             if ser.in_waiting > 0:
                 line = ser.readline().decode().strip()
+                print(f"Received: {line}")
 
-                # Only process TIME_SYNCED responses, ignore other Arduino output
-                if line.startswith('TIME_SYNCED:'):
-                    print(f"Arduino response: {line}")
+                if line == 'WAKE_UP':
+                    print('Arduino is awake! Sending precise time...')
 
-                    if 'OK' in line:
-                        print('Precise time synchronization successful!')
+                    # Get current time immediately when Arduino signals
+                    sync_time = datetime.datetime.now(datetime.UTC)
 
-                        # Read the RTC confirmation line specifically
-                        confirmation_timeout = time.time() + 2
-                        while time.time() < confirmation_timeout:
-                            if ser.in_waiting > 0:
-                                confirmation = ser.readline().decode().strip()
-                                if confirmation.startswith('RTC:'):
-                                    print(f"Arduino confirms: {confirmation}")
-                                    break
+                    # Format and send command immediately (no delay compensation needed)
+                    time_command = f"SYNC_TIME:{sync_time.year},{sync_time.month:02d},{sync_time.day:02d},{sync_time.hour:02d},{sync_time.minute:02d},{sync_time.second:02d}\n"  # noqa: E501
 
-                        # Show final accuracy
-                        final_time = datetime.datetime.now(datetime.UTC)
-                        print(f"Current UTC time: {final_time.strftime('%Y-%m-%d %H:%M:%S')}")  # noqa: E501
-                        ser.close()
-                        return True
-                    else:
-                        print('Time synchronization failed')
-                        ser.close()
-                        return False
+                    print(f"Syncing to: {sync_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]}")  # noqa: E501
 
-        print('Timeout waiting for Arduino response')
+                    ser.write(time_command.encode())
+                    ser.flush()
+
+                    # Wait for response
+                    response_timeout = time.time() + 5
+                    while time.time() < response_timeout:
+                        if ser.in_waiting > 0:
+                            response = ser.readline().decode().strip()
+                            print(f"Arduino response: {response}")
+
+                            if response.startswith('TIME_SYNCED:OK'):
+                                print('Precise time synchronization successful!')
+
+                                # Read the RTC confirmation line
+                                confirmation_timeout = time.time() + 2
+                                while time.time() < confirmation_timeout:
+                                    if ser.in_waiting > 0:
+                                        confirmation = ser.readline().decode().strip()
+                                        if confirmation.startswith('RTC:'):
+                                            print(
+                                                f"Arduino confirms: {confirmation}",
+                                            )
+                                            break
+
+                                ser.close()
+                                return True
+                            elif response.startswith('TIME_SYNCED:ERR'):
+                                print('Time synchronization failed')
+                                ser.close()
+                                return False
+
+                    print('Timeout waiting for sync confirmation')
+                    ser.close()
+                    return False
+
+        print('Timeout waiting for Arduino WAKE_UP signal')
+        print('Make sure Arduino is running and waking up within the timeout period')
         ser.close()
         return False
 
@@ -177,8 +165,8 @@ Examples:
         help='Serial baudrate (default: 9600)',
     )
     parser.add_argument(
-        '--timeout', '-t', type=int, default=5,
-        help='Communication timeout in seconds (default: 5)',
+        '--timeout', '-t', type=int, default=30,
+        help='Communication timeout in seconds (default: 30)',
     )
     parser.add_argument(
         '--list-ports', '-l', action='store_true',
