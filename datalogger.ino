@@ -1,14 +1,14 @@
 #include <Adafruit_MAX31865.h>
+#include <LowPower.h>
 #include <RTClib.h>
 #include <SdFat.h>
 
 /* configuration */
 char filename[32]; // Dynamic filename based on startup time
 const char *fileHeader = "date,temp";
-const unsigned int logIntervalSeconds = 1;
+const unsigned int logIntervalSeconds = 10;
 
 const int sdCardPin = 10;
-const int LED_PIN = 9; // Changed from 13 to avoid SPI conflict
 
 // MAX31865 configuration (using hardware SPI)
 const int MAX31865_CS = 8; // Chip select pin for MAX31865
@@ -26,13 +26,6 @@ RTC_DS1307 RTC;
 Adafruit_MAX31865 max31865 = Adafruit_MAX31865(MAX31865_CS);
 float temp;
 char timeString[] = "0000-00-00T00:00:00Z";
-unsigned long currentMillis = 0;
-unsigned long offsetMillis = 0;
-
-// LED flash variables
-const unsigned int LED_FLASH_DURATION = 250; // flash duration in ms
-unsigned long ledFlashStartTime = 0;
-bool ledFlashing = false;
 
 /*derived constants */
 unsigned long logIntervalMillis = logIntervalSeconds * 1000;
@@ -46,19 +39,6 @@ void dateTime(uint16_t *date, uint16_t *time) {
 
   // Return time using FAT_TIME macro to pack time into 16 bits
   *time = FAT_TIME(now.hour(), now.minute(), now.second());
-}
-
-void startLEDFlash() {
-  digitalWrite(LED_PIN, HIGH);
-  ledFlashStartTime = millis();
-  ledFlashing = true;
-}
-
-void updateLEDFlash() {
-  if (ledFlashing && (millis() - ledFlashStartTime >= LED_FLASH_DURATION)) {
-    digitalWrite(LED_PIN, LOW);
-    ledFlashing = false;
-  }
 }
 
 void writeFileHeader(File &dataFile) {
@@ -117,10 +97,6 @@ void syncClock() {
 
 void setup() {
   Serial.begin(9600);
-
-  // Initialize LED pin
-  pinMode(LED_PIN, OUTPUT);
-  digitalWrite(LED_PIN, LOW); // Ensure LED starts off
 
   /* 1. initialize the RTC clock */
   if (!RTC.begin()) {
@@ -186,13 +162,37 @@ float readSensor() {
 }
 
 void loop() {
-  currentMillis = millis();
-  // Handle LED flash timing (non-blocking)
-  updateLEDFlash();
+  // Re-enable serial communication after wake-up to check for commands
+  Serial.begin(9600);
 
-  // Check for time sync command from serial
-  if (Serial.available()) {
-    syncClock();
+  // Give serial a moment to initialize
+  delay(50);
+
+  // Check if USB is connected by testing if Serial is ready
+  // This works because Serial only becomes ready when USB host is connected
+  bool usbConnected = false;
+  if (Serial) {
+    // Send a test character and see if it can be written
+    // If USB is connected, this will succeed quickly
+    Serial.print("");
+    Serial.flush();
+    usbConnected = true;
+  }
+
+  // Only wait for sync commands if USB is connected
+  if (usbConnected) {
+    // Send wake-up signal to indicate Arduino is ready for time sync
+    Serial.println("WAKE_UP");
+    Serial.flush();
+
+    // Wait briefly for time sync command (50ms window)
+    unsigned long syncWindow = millis() + 50;
+    while (millis() < syncWindow) {
+      if (Serial.available()) {
+        syncClock();
+        break;
+      }
+    }
   }
 
   /* open the file to log data to*/
@@ -210,18 +210,21 @@ void loop() {
     dataFile.println(temp, 2);
     dataFile.flush();
     dataFile.close();
-
-    // Flash LED to indicate successful data recording
-    startLEDFlash();
   } else {
     Serial.println("LOG ERR");
   }
-  offsetMillis = millis() - currentMillis;
-  Serial.println(timeString);
-  // Adjust delay to maintain consistent interval (prevent underflow)
-  if (offsetMillis < logIntervalMillis) {
-    delay(logIntervalMillis - offsetMillis);
-  } else {
-    delay(10); // Minimum delay if processing took too long
+
+  // Only output to serial if USB is connected
+  if (usbConnected) {
+    Serial.println(timeString);
+    Serial.flush();
+  }
+
+  // Disable serial communication before sleep for maximum power savings
+  Serial.end();
+
+  for (unsigned int i = 0; i < logIntervalSeconds; i++) {
+    LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+                  SPI_OFF, USART0_OFF, TWI_OFF);
   }
 }
