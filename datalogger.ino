@@ -10,10 +10,11 @@ const unsigned int logIntervalSeconds = 10;
 
 const int sdCardPin = 10;
 
-// MAX31865 configuration (using hardware SPI)
-const int MAX31865_CS = 8; // Chip select pin for MAX31865
-// Hardware SPI pins (on most Arduino boards):
-// MOSI = 11, MISO = 12, SCK = 13
+// MAX31865 configuration (using software SPI to avoid conflicts with SD card)
+const int MAX31865_CS = 8;  // Chip select pin for MAX31865
+const int MAX31865_DI = 7;  // Data in (MOSI) - use different pin from SD card
+const int MAX31865_DO = 6;  // Data out (MISO) - use different pin from SD card
+const int MAX31865_CLK = 5; // Clock - use different pin from SD card
 
 // PT1000 configuration
 const float RREF = 4300.0;     // Reference resistor value (4.3k for PT1000)
@@ -22,8 +23,9 @@ const float RNOMINAL = 1000.0; // PT1000 nominal resistance at 0°C
 SdFat SD;
 RTC_DS1307 RTC;
 
-// Initialize MAX31865 sensor (using hardware SPI)
-Adafruit_MAX31865 max31865 = Adafruit_MAX31865(MAX31865_CS);
+// Initialize MAX31865 sensor (using software SPI)
+Adafruit_MAX31865 max31865 =
+    Adafruit_MAX31865(MAX31865_CS, MAX31865_DI, MAX31865_DO, MAX31865_CLK);
 float temp;
 char timeString[] = "0000-00-00T00:00:00Z";
 
