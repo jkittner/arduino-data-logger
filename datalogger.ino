@@ -6,7 +6,7 @@
 /* configuration */
 char filename[32]; // Dynamic filename based on startup time
 const char *fileHeader = "date,temp";
-const unsigned int logIntervalSeconds = 10;
+const unsigned int logIntervalSeconds = 1;
 
 const int sdCardPin = 10;
 
@@ -202,6 +202,7 @@ void loop() {
     Serial.println("LOG ERR");
   }
   Serial.println(timeString);
+  Serial.println(temp);
   Serial.flush();
 
   // Disable serial communication before sleep for maximum power savings
