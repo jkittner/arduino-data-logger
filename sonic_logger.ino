@@ -14,7 +14,7 @@ const int sdCardPin = 10;
 SoftwareSerial rs485(2, 3); // RX=D2, TX=D3
 const int DE_RE_PIN = 4;    // MAX485 DE/RE control pin
 const char *SENSOR_ADDRESS = "#105#";
-char outputBuffer[32];
+char outputBuffer[50];
 
 SdFat SD;
 RTC_DS1307 RTC;
@@ -138,7 +138,7 @@ char *readSensor() {
   /* send the command. In RS-485 half duplex mode it only works if the sensor
      has an address associated with it */
   rs485.print(SENSOR_ADDRESS);
-  rs485.print("\r\n");
+  rs485.print("RD?\r\n");
   rs485.flush();
   delay(1);
   /* switch to receiver mode */
