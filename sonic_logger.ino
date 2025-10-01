@@ -13,6 +13,7 @@ const int sdCardPin = 10;
 // SoftwareSerial(rxPin, txPin)
 SoftwareSerial rs485(2, 3); // RX=D2, TX=D3
 const int DE_RE_PIN = 4;    // MAX485 DE/RE control pin
+const char *ID = "01";      // Device ID for logging
 const char *SENSOR_ADDRESS = "#105#";
 char outputBuffer[50];
 
@@ -188,6 +189,8 @@ void loop() {
            now.second());
   char *sonic_log = readSensor();
   if (dataFile) {
+    dataFile.print(ID);
+    dataFile.print(",");
     dataFile.print(timeString);
     dataFile.print(",");
     // the last value can use println to add newline
