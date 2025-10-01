@@ -5,9 +5,9 @@
 
 /* configuration */
 char filename[32]; // Dynamic filename based on startup time
-const char *fileHeader = "date,temp";
+const char *fileHeader = "ID,date,temp";
 const unsigned int logIntervalSeconds = 1;
-
+const char *ID = "02";
 const int sdCardPin = 10;
 
 // MAX31865 configuration (using software SPI to avoid conflicts with SD card)
@@ -192,6 +192,8 @@ void loop() {
            now.second());
   temp = readSensor();
   if (dataFile) {
+    dataFile.print(ID);
+    dataFile.print(",");
     dataFile.print(timeString);
     dataFile.print(",");
     // the last value can use println to add newline
