@@ -184,9 +184,9 @@ void loop() {
   File dataFile = SD.open(filename, FILE_WRITE);
   /* start logging the data */
   DateTime now = RTC.now();
-  snprintf(timeString, sizeof(timeString), "%04d-%02d-%02dT%02d:%02d:%02dZ",
-           now.year(), now.month(), now.day(), now.hour(), now.minute(),
-           now.second());
+  snprintf(filename, sizeof(filename), "log_%s_%04d%02d%02d_%02d%02d%02d.csv",
+           ID, startupTime.year(), startupTime.month(), startupTime.day(),
+           startupTime.hour(), startupTime.minute(), startupTime.second());
   char *sonic_log = readSensor();
   if (dataFile) {
     dataFile.print(ID);

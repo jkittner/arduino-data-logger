@@ -124,8 +124,8 @@ void setup() {
 
   /* 3. Create new data file with startup timestamp */
   DateTime startupTime = RTC.now();
-  snprintf(filename, sizeof(filename), "log_%04d%02d%02d_%02d%02d%02d.csv",
-           startupTime.year(), startupTime.month(), startupTime.day(),
+  snprintf(filename, sizeof(filename), "log_%s_%04d%02d%02d_%02d%02d%02d.csv",
+           ID, startupTime.year(), startupTime.month(), startupTime.day(),
            startupTime.hour(), startupTime.minute(), startupTime.second());
 
   Serial.print("FILE: ");
