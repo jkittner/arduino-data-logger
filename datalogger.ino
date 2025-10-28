@@ -6,7 +6,10 @@
 /* configuration */
 char filename[32]; // Dynamic filename based on startup time
 const char *fileHeader = "ID,date,temp";
-const unsigned int logIntervalSeconds = 1;
+/* how often to sleep for 8s. 1 means log a value every 8 seconds, 2 means on
+   Log every 600 seconds (10 minutes)
+ */
+const unsigned int logIntervalSeconds = 75;
 const char *ID = "02";
 const int sdCardPin = 10;
 
@@ -28,9 +31,6 @@ Adafruit_MAX31865 max31865 =
     Adafruit_MAX31865(MAX31865_CS, MAX31865_DI, MAX31865_DO, MAX31865_CLK);
 float temp;
 char timeString[] = "0000-00-00T00:00:00Z";
-
-/*derived constants */
-unsigned long logIntervalMillis = logIntervalSeconds * 1000;
 
 // Callback function to set file timestamps from RTC
 void dateTime(uint16_t *date, uint16_t *time) {
@@ -122,6 +122,20 @@ void setup() {
   // Set callback for file timestamps
   SdFile::dateTimeCallback(dateTime);
 
+  // Try to sync clock at startup
+  // Send wake-up signal to indicate Arduino is ready for time sync
+  Serial.println("WAKE_UP");
+  Serial.flush();
+
+  // Wait briefly for time sync command (50ms window)
+  unsigned long syncWindow = millis() + 50;
+  while (millis() < syncWindow) {
+    if (Serial.available()) {
+      syncClock();
+      break;
+    }
+  }
+
   /* 3. Create new data file with startup timestamp */
   DateTime startupTime = RTC.now();
   snprintf(filename, sizeof(filename), "log_%s_%04d%02d%02d_%02d%02d%02d.csv",
@@ -164,25 +178,8 @@ float readSensor() {
 }
 
 void loop() {
-  // Re-enable serial communication after wake-up to check for commands
+  // Re-enable serial communication after wake-up
   Serial.begin(9600);
-
-  // Give serial a moment to initialize
-  delay(50);
-
-  // Send wake-up signal to indicate Arduino is ready for time sync
-  Serial.println("WAKE_UP");
-  Serial.flush();
-
-  // Wait briefly for time sync command (50ms window)
-  unsigned long syncWindow = millis() + 50;
-  while (millis() < syncWindow) {
-    if (Serial.available()) {
-      syncClock();
-      break;
-    }
-  }
-
   /* open the file to log data to*/
   File dataFile = SD.open(filename, FILE_WRITE);
   /* start logging the data */
@@ -211,7 +208,7 @@ void loop() {
   Serial.end();
 
   for (unsigned int i = 0; i < logIntervalSeconds; i++) {
-    LowPower.idle(SLEEP_1S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
+    LowPower.idle(SLEEP_8S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF,
                   SPI_OFF, USART0_OFF, TWI_OFF);
   }
 }
